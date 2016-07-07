@@ -16,6 +16,7 @@
 #import "Index.h"
 #import "WCell.h"
 #import "ZCell.h"
+#import <MJRefresh.h>
 
 #define MAS_SHORTHAND
 
@@ -42,7 +43,6 @@
 @property (weak, nonatomic) IBOutlet UITableView *zTableView;
 @property (weak, nonatomic) IBOutlet UITableView *wTableView;
 @property (weak, nonatomic) IBOutlet UILabel *pm;
-
 
 @end
 
@@ -78,6 +78,7 @@
 //搜索输入的城市
 - (IBAction)didClickSearch:(id)sender {
     
+    self.tableView.hidden = NO;
     //自动收回键盘
     [self.view endEditing:YES];
     
@@ -100,14 +101,13 @@
         [SVProgressHUD showWithStatus:@"正在搜索" maskType:SVProgressHUDMaskTypeBlack];
         
         //模拟延时，提高用户体验
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            
-            [SVProgressHUD dismiss];
+        
+        if (self.placemarks.count > 0)
             [UIView animateWithDuration:0.25 animations:^{
                 //将搜索结果列表table显示
+                [SVProgressHUD dismiss];
                 self.tableView.hidden = NO;
             }];
-        });
     }];
 }
 
@@ -116,6 +116,7 @@
     [super viewDidLoad];
     // Do any additional setup after loading the view.
     
+    self.tableView.hidden = YES;
     
     self.view.backgroundColor = [UIColor whiteColor];
 
@@ -154,20 +155,30 @@
     self.wTableView.allowsSelection = NO;
     self.zTableView.allowsSelection = NO;
     [self creatViews];
+    
 }
 
 
 //请求天气数据方法
 - (void) loadWeatherWith:(CLLocation *)loca {
 
+    [SVProgressHUD showWithStatus:@"正在获取天气" maskType:SVProgressHUDMaskTypeBlack];
+  
+        NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
+        NSString *la = [ud objectForKey:@"latitude"];
+        NSString *lo = [ud objectForKey:@"longitude"];
+        self.cityLoca = [ud objectForKey:@"city"];
+        loca = [[CLLocation alloc] initWithLatitude:[la floatValue] longitude:[lo floatValue]];
+    
     [Waether loadWeatherWithCity:(CLLocation *)loca WithSuccessBlock:^(Waether *w) {
         [self reloadUI:w];
         self.w = w;
+        [SVProgressHUD dismiss];
       //  self.cityLoca = w.currentCity;
     } andErrorBlock:^(NSError *error){
-        NSLog(@"天气加载出错!   %@", error);
+        [SVProgressHUD dismiss];
+        [SVProgressHUD showErrorWithStatus:@"天气获取出错" maskType:SVProgressHUDMaskTypeBlack];
     }];
-
 }
 
 //在请求数据结束天气数据通过代码块将数据传过来以后刷新界面数据
@@ -245,6 +256,11 @@
     
     UIBarButtonItem *btn = [[UIBarButtonItem alloc] initWithImage:img style:UIBarButtonItemStylePlain target:self action:@selector(didClickLocation)];
     self.navigationItem.leftBarButtonItem = btn;
+    
+    
+    //读取当前位置的经纬度和城市
+    UIBarButtonItem *rightBtn = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"refresh"] style:UIBarButtonItemStylePlain target:self action:@selector(loadWeatherWith:)];
+    self.navigationItem.rightBarButtonItem = rightBtn;
 
   }
 
@@ -269,7 +285,6 @@
     {
         return @"10.png";
     }
-
     if([type isEqualToString:@"大雨转晴"])
     {
         return @"4.png";
@@ -277,16 +292,6 @@
     if([type isEqualToString:@"阴转晴"])
     {
         return @"12.png";
-    }
-    if ([type isEqualToString:@"阴"]) {
-        return @"5.png";
-    }
-    if ([type isEqualToString:@"多云"]) {
-        return @"11.png";
-    }
-    if([type isEqualToString:@"雨"])
-    {
-        return @"15.png";
     }
     if([type isEqualToString:@"雨加雪"])
     {
@@ -328,6 +333,23 @@
     if ([type isEqualToString:@"阴转多云"]) {
         return @"5.png";
     }
+    if ([type rangeOfString:@"晴"].location != NSNotFound) {
+        return @"8.png";
+    }
+    if ([type rangeOfString:@"阴"].location != NSNotFound) {
+        return @"5.png";
+    }
+    if ([type rangeOfString:@"多云"].location != NSNotFound) {
+        return @"11.png";
+    }
+    if([type rangeOfString:@"雨"].location != NSNotFound)
+    {
+        return @"15.png";
+    }
+    if([type rangeOfString:@"雪"].location != NSNotFound)
+    {
+        return @"10.png";
+    }
     return @"9";
 }
 
@@ -343,7 +365,8 @@
     [geocoder reverseGeocodeLocation:location completionHandler:^(NSArray<CLPlacemark *> * _Nullable placemarks, NSError * _Nullable error) {
        //放错处理
         if (placemarks.count == 0 || error) {
-            NSLog(@"定位出错");
+            [SVProgressHUD dismiss];
+            [SVProgressHUD showErrorWithStatus:@"定位出错" maskType:SVProgressHUDMaskTypeBlack];
             return;
         }
         
@@ -362,7 +385,7 @@
             [ud setObject:la forKey:@"latitude"];
             [ud setObject:lo forKey:@"longitude"];
             NSString *ci = [NSString stringWithFormat:@"定位完成\n当前位置：%@", self.cityLoca];
-            
+            [SVProgressHUD dismiss];
             [SVProgressHUD showSuccessWithStatus:ci];
         }
         
@@ -420,6 +443,8 @@
 //城市搜索结果列表点击自动切换位置并根据当前城市确定经纬度请求天气数据
 -(void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     
+    self.tableView.hidden = YES;
+    
     [SVProgressHUD showWithStatus:@"正在切换" maskType:SVProgressHUDMaskTypeBlack];
     
     [UIView animateWithDuration:0.25 animations:^{
@@ -427,8 +452,6 @@
     }];
   
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        
-        [SVProgressHUD dismiss];
         
         CLPlacemark *placemark = self.placemarks[indexPath.row];
         
@@ -440,14 +463,12 @@
         [ud setObject:lo forKey:@"longitude"];
         
         NSString *str = [NSString stringWithFormat:@"切换成功!\n当前位置:%@", placemark.name];
-        
-//        if (placemark.subLocality) {
-//            self.cityLoca = [NSString stringWithFormat:@"%@%@",placemark.locality, placemark.subLocality];
-//        }
+
         self.cityLoca = [NSString stringWithFormat:@"%@",placemark.name];
         
         [self loadWeatherWith:placemark.location];
-        
+        [SVProgressHUD dismiss];
+        self.placemarks = nil;
         [SVProgressHUD showSuccessWithStatus:str];
   
     });

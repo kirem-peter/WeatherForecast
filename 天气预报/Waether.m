@@ -10,6 +10,7 @@
 #import "Weather_data.h"
 #import "Index.h"
 #import <CoreLocation/CoreLocation.h>
+#import "SVProgressHUD/SVProgressHUD.h"
 
 @implementation Waether
 
@@ -49,11 +50,12 @@
     requset.HTTPMethod = @"post";
     NSString *body = [NSString stringWithFormat:@"location=%f,%f&output=%@&ak=%@&mcode=%@", loca.coordinate.longitude, loca.coordinate.latitude, @"json", @"dOGHjxtz2yZHYbwVveBW4HXNbf3mENjc", @"cn.itgcq.weather"];
     requset.HTTPBody = [body dataUsingEncoding:NSUTF8StringEncoding];
-    NSLog(@"%@", body);
+    requset.timeoutInterval = 5;
     [NSURLConnection sendAsynchronousRequest:requset queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse * _Nullable response, NSData * _Nullable data, NSError * _Nullable connectionError) {
        
         if (connectionError) {
-            NSLog(@"%@", connectionError);
+            [SVProgressHUD dismiss];
+            [SVProgressHUD showErrorWithStatus:@"网络错误!\n请检查网络设置" maskType:SVProgressHUDMaskTypeBlack];
             return;
         }
         
